@@ -1,0 +1,164 @@
+enum DriverStat {
+  BANNED
+  SUSPENDED
+  DORMANT
+  ACTIVE
+  LIVE
+  BUSY
+}
+
+enum JobStatus
+{
+BOOKING
+ACCEPTED
+LOADING
+STARTED
+UNLOADING
+COMPLETED
+WAITING
+}
+
+
+enum CustomerClass {
+NORMAL
+PREMIUM
+}
+
+type Driver
+{
+driverID: ID!
+name: String
+contactNumber: String
+driverStatus: DriverStat
+kycStatus: String
+jobs : [Job]
+licenseID: String
+panID: String
+adhaarID: String
+vehicleNumber: String
+vehicleType: String
+joiningDate: String
+kycRCScan: String
+kycLicenseScan: String
+kycPANScan: String
+kycSelfie: String
+kycVehicleFrontPic: String
+onDutyStatus: String
+location: Point
+dutyInProgress: Job
+driverType: String
+pendingPayout: Float
+isHomeLocationOn: String
+homeLocation: String
+
+}
+
+
+type Customer
+{
+   customerID: ID!
+    name: String
+    contactNumber: String
+    banned: String
+    kycStatus: String
+    jobs: [Job]
+    joiningDate: Date
+    jobInProgress: Boolean
+    location: Point
+    customerType: CustomerClass
+}
+
+
+type Job
+{
+jobID: ID!
+driver: Driver
+customer: Customer
+dateTime: Date
+vehicleType: String
+baseFare: Float
+accumlativeWaitTime: Date
+sourceLoc: Point
+stopLoc: [Point]
+distance: Int
+labourWork: Boolean
+items: String
+aproxWeight: Int
+totalAmount: Int
+isCustomerPaidIn: Boolean
+isDriverPaidOut: Boolean
+jobProgress: JobStatus
+}
+
+
+type User {
+  userId: ID!
+  name: String
+  reviews: [Review] @relation(name: "WROTE", direction: OUT)
+  avgStars: Float
+    @cypher(
+      statement: "MATCH (this)-[:WROTE]->(r:Review) RETURN toFloat(avg(r.stars))"
+    )
+  numReviews: Int
+    @cypher(statement: "MATCH (this)-[:WROTE]->(r:Review) RETURN COUNT(r)")
+  recommendations(first: Int = 3): [Business]
+    @cypher(
+      statement: "MATCH (this)-[:WROTE]->(r:Review)-[:REVIEWS]->(:Business)<-[:REVIEWS]-(:Review)<-[:WROTE]-(:User)-[:WROTE]->(:Review)-[:REVIEWS]->(rec:Business) WHERE NOT EXISTS( (this)-[:WROTE]->(:Review)-[:REVIEWS]->(rec) ) WITH rec, COUNT(*) AS num ORDER BY num DESC LIMIT $first RETURN rec"
+    )
+}
+
+type Business {
+  businessId: ID!
+  name: String!
+  address: String
+  city: String
+  state: String
+  location: Point
+  avgStars: Float
+    @cypher(
+      statement: "MATCH (this)<-[:REVIEWS]-(r:Review) RETURN coalesce(avg(r.stars),0.0)"
+    )
+  reviews: [Review] @relation(name: "REVIEWS", direction: IN)
+  categories: [Category] @relation(name: "IN_CATEGORY", direction: OUT)
+}
+
+type Review {
+  reviewId: ID!
+  stars: Float
+  text: String
+  date: Date
+  testing: String
+    @cypher(
+      statement: "WITH 2 + 2 as y RETURN y"
+      )
+
+  
+  business: Business @relation(name: "REVIEWS", direction: OUT)
+  user: User @relation(name: "WROTE", direction: IN)
+}
+
+type Category {
+  name: ID!
+  businesses: [Business] @relation(name: "IN_CATEGORY", direction: IN)
+}
+
+type RatingCount {
+  stars: Float!
+  count: Int!
+}
+
+type Mutation {
+  mergeBusinessCategory(categories: [String!]!, businessId: ID!): Business
+    @cypher(
+      statement: "MATCH (b:Business {businessId: $businessId}) UNWIND $categories AS cat MERGE (c:Category {name: cat}) MERGE (b)-[:IN_CATEGORY]->(c) RETURN b"
+    )
+}
+
+type Query {
+  userCount: Int! @cypher(statement: "MATCH (u:User) RETURN COUNT(u)")
+  ratingsCount: [RatingCount]
+    @cypher(
+      statement: "MATCH (r:Review) WITH r.stars AS stars, COUNT(*) AS count ORDER BY stars RETURN {stars: stars, count: count}"
+    )
+}
+ 
